@@ -1,6 +1,6 @@
 ![LangChain Academy](https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/66e9eba1020525eea7873f96_LCA-big-green%20(2).svg)
 
-### This fork adds support for Anthropic APIs in the notebooks and python files 
+### This fork adds support for Anthropic APIs in the notebooks and python files. Rest of the content is mostly unchanged.
 
 ## Introduction
 
