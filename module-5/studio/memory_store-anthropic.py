@@ -1,7 +1,3 @@
-from pydantic import BaseModel, Field
-
-from trustcall import create_extractor
-
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_anthropic import ChatAnthropic
@@ -12,27 +8,32 @@ import configuration
 # Initialize the LLM
 model = ChatAnthropic(model="claude-3-5-sonnet-20241022",temperature=0)
 
-# Schema 
-class UserProfile(BaseModel):
-    """ Profile of a user """
-    user_name: str = Field(description="The user's preferred name")
-    user_location: str = Field(description="The user's location")
-    interests: list = Field(description="A list of the user's interests")
-
-# Create the extractor
-trustcall_extractor = create_extractor(
-    model,
-    tools=[UserProfile],
-    tool_choice="UserProfile", # Enforces use of the UserProfile tool
-)
-
 # Chatbot instruction
 MODEL_SYSTEM_MESSAGE = """You are a helpful assistant with memory that provides information about the user. 
 If you have memory for this user, use it to personalize your responses.
 Here is the memory (it may be empty): {memory}"""
 
-# Extraction instruction
-TRUSTCALL_INSTRUCTION = """Create or update the memory (JSON doc) to incorporate information from the following conversation:"""
+# Create new memory from the chat history and any existing memory
+CREATE_MEMORY_INSTRUCTION = """"You are collecting information about the user to personalize your responses.
+
+CURRENT USER INFORMATION:
+{memory}
+
+INSTRUCTIONS:
+1. Review the chat history below carefully
+2. Identify new information about the user, such as:
+   - Personal details (name, location)
+   - Preferences (likes, dislikes)
+   - Interests and hobbies
+   - Past experiences
+   - Goals or future plans
+3. Merge any new information with existing memory
+4. Format the memory as a clear, bulleted list
+5. If new information conflicts with existing memory, keep the most recent version
+
+Remember: Only include factual information directly stated by the user. Do not make assumptions or inferences.
+
+Based on the chat history below, please update the user information:"""
 
 def call_model(state: MessagesState, config: RunnableConfig, store: BaseStore):
 
@@ -46,21 +47,18 @@ def call_model(state: MessagesState, config: RunnableConfig, store: BaseStore):
 
     # Retrieve memory from the store
     namespace = ("memory", user_id)
-    existing_memory = store.get(namespace, "user_memory")
+    key = "user_memory"
+    existing_memory = store.get(namespace, key)
 
-    # Format the memories for the system prompt
-    if existing_memory and existing_memory.value:
-        memory_dict = existing_memory.value
-        formatted_memory = (
-            f"Name: {memory_dict.get('user_name', 'Unknown')}\n"
-            f"Location: {memory_dict.get('user_location', 'Unknown')}\n"
-            f"Interests: {', '.join(memory_dict.get('interests', []))}"      
-        )
+    # Extract the memory
+    if existing_memory:
+        # Value is a dictionary with a memory key
+        existing_memory_content = existing_memory.value.get('memory')
     else:
-        formatted_memory = None
+        existing_memory_content = "No existing memory found."
 
     # Format the memory in the system prompt
-    system_msg = MODEL_SYSTEM_MESSAGE.format(memory=formatted_memory)
+    system_msg = MODEL_SYSTEM_MESSAGE.format(memory=existing_memory_content)
 
     # Respond using memory as well as the chat history
     response = model.invoke([SystemMessage(content=system_msg)]+state["messages"])
@@ -80,19 +78,21 @@ def write_memory(state: MessagesState, config: RunnableConfig, store: BaseStore)
     # Retrieve existing memory from the store
     namespace = ("memory", user_id)
     existing_memory = store.get(namespace, "user_memory")
-        
-    # Get the profile as the value from the list, and convert it to a JSON doc
-    existing_profile = {"UserProfile": existing_memory.value} if existing_memory else None
-    
-    # Invoke the extractor
-    result = trustcall_extractor.invoke({"messages": [SystemMessage(content=TRUSTCALL_INSTRUCTION)]+state["messages"], "existing": existing_profile})
-    
-    # Get the updated profile as a JSON object
-    updated_profile = result["responses"][0].model_dump()
 
-    # Save the updated profile
+    # Extract the memory
+    if existing_memory:
+        # Value is a dictionary with a memory key
+        existing_memory_content = existing_memory.value.get('memory')
+    else:
+        existing_memory_content = "No existing memory found."
+        
+    # Format the memory in the system prompt
+    system_msg = CREATE_MEMORY_INSTRUCTION.format(memory=existing_memory_content)
+    new_memory = model.invoke([SystemMessage(content=system_msg)]+state['messages'])
+
+    # Overwrite the existing memory in the store 
     key = "user_memory"
-    store.put(namespace, key, updated_profile)
+    store.put(namespace, key, {"memory": new_memory.content})
 
 # Define the graph
 builder = StateGraph(MessagesState,config_schema=configuration.Configuration)

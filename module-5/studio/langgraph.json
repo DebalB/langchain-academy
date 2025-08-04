@@ -4,7 +4,11 @@
       "chatbot_memory": "./memory_store.py:graph",
       "chatbot_memory_profile": "./memoryschema_profile.py:graph",
       "chatbot_memory_collection": "./memoryschema_collection.py:graph",
-      "memory_agent": "./memory_agent.py:graph"
+      "memory_agent": "./memory_agent.py:graph",
+      "chatbot_memory-anthropic": "./memory_store-anthropic.py:graph",
+      "chatbot_memory_profile-anthropic": "./memoryschema_profile-anthropic.py:graph",
+      "chatbot_memory_collection-anthropic": "./memoryschema_collection-anthropic.py:graph",
+      "memory_agent-anthropic": "./memory_agent-anthropic.py:graph"
     },
     "env": "./.env",
     "python_version": "3.11",
