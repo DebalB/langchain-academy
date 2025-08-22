@@ -1,7 +1,8 @@
 {
     "dockerfile_lines": [],
     "graphs": {
-      "task_maistro": "./task_maistro.py:graph"
+      "task_maistro": "./task_maistro.py:graph",
+      "task_maistro_anthropic": "./task_maistro_anthropic.py:graph"
     },
     "python_version": "3.11",
     "dependencies": [
